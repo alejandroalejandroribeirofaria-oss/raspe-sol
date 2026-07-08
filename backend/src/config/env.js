@@ -1,7 +1,10 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
-dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || '.env' });
+// Só carrega .env em dev. Em produção o Render já injeta
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || '.env' });
+}
 
 const envBoolean = (defaultValue) => z.preprocess((value) => {
   if (value === undefined || value === null || value === '') return defaultValue;
@@ -51,4 +54,3 @@ if (
 
 export const env = parsed.data;
 env.SOLANA_COMMITMENT ??= env.NODE_ENV === 'production' ? 'finalized' : 'confirmed';
-
