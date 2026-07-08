@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { env } from '../config/env.js';
-import { prisma } from '../config/prisma.js'; // <- adiciona isso
+import { prisma } from '../config/prisma.js';
 import { TICKET_PRICE_LAMPORTS } from '../constants.js';
-import { getBatchStats, ensureOpenBatch } from '../services/batch.service.js'; // <- adiciona ensureOpenBatch
+import { getBatchStats, ensureOpenBatch } from '../services/batch.service.js';
 import {
   getLeaderboard,
   getWalletTickets,
@@ -14,16 +14,9 @@ import { assertPublicKey } from '../services/solana.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { HttpError } from '../utils/httpError.js';
 import { serializeBigInt } from '../utils/serialize.js';
-import axios from 'axios'; // npm i axios se não tiver
+import axios from 'axios';
 
-publicRouter.get('/preco', asyncHandler(async (_req, res) => {
-  const { data } = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=brl,usd');
-  res.json({ 
-    solBRL: data.solana.brl,
-    solUSD: data.solana.usd,
-    fonte: "CoinGecko"
-  
-export const publicRouter = Router();
+export const publicRouter = Router(); // <- TEM QUE VIR PRIMEIRO
 
 const purchaseSchema = z.object({
   wallet: z.string().min(32),
@@ -40,11 +33,21 @@ const createBatchSchema = z.object({
   number: z.coerce.number().int().positive()
 });
 
+// NOVA ROTA PRECO
+publicRouter.get('/preco', asyncHandler(async (_req, res) => {
+  const { data } = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=brl,usd');
+  res.json({ 
+    solBRL: data.solana.brl,
+    solUSD: data.solana.usd,
+    fonte: "CoinGecko"
+  }); // <- fechei aqui
+}));
+
 // ROTAS QUE FALTAVAM
 publicRouter.get('/batches', asyncHandler(async (_req, res) => {
   const batches = await prisma.batch.findMany({ 
     orderBy: { number: 'desc' },
-    include: { _count: { select: { tickets: true } } }
+    include: { _count: { select: { tickets: true } }
   });
   res.json(serializeBigInt(batches));
 }));
@@ -81,5 +84,3 @@ publicRouter.get('/config', (_req, res) => {
       ignoreRemainder: env.IGNORE_REMAINDER
   });
 });
-
-publicRouter
