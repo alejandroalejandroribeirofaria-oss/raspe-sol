@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useMemo, useState, useCallback } from 'react';
 import {
   clusterApiUrl,
   Connection,
@@ -16,22 +16,43 @@ function getProvider() {
 }
 
 export function WalletProvider({ children }) {
-  const [publicKey, setPublicKey] = useState(null);
+  const [publicKey, setPublicKey] = useState(null); // vamos salvar PublicKey object
   const [balance, setBalance] = useState(null);
   const [error, setError] = useState('');
+
+  const refreshBalance = useCallback(async (wallet, cluster = 'devnet') => {
+    if (!wallet) return null;
+    try {
+      const connection = new Connection(clusterApiUrl(cluster), 'confirmed');
+      const lamports = await connection.getBalance(wallet);
+      const sol = lamports / LAMPORTS_PER_SOL;
+      setBalance(sol);
+      return sol;
+    } catch {
+      setBalance(0);
+      return 0;
+    }
+  }, []);
 
   const connect = async (cluster = import.meta.env.VITE_DEFAULT_CLUSTER || 'devnet') => {
     const provider = getProvider();
     if (!provider) {
       window.open('https://phantom.app/', '_blank', 'noopener,noreferrer');
-      throw new Error('Phantom Wallet not found');
+      setError('Instala a Phantom Wallet');
+      return null; // <- NÃO JOGA ERRO PRA NÃO QUEBRAR O APP
     }
 
-    const response = await provider.connect();
-    const wallet = response.publicKey.toBase58();
-    setPublicKey(wallet);
-    await refreshBalance(wallet, cluster);
-    return wallet;
+    try {
+      const response = await provider.connect();
+      const wallet = response.publicKey; // <- SALVA O OBJETO PublicKey
+      setPublicKey(wallet);
+      setError('');
+      await refreshBalance(wallet, cluster);
+      return wallet.toBase58();
+    } catch (e) {
+      setError(e.message);
+      return null;
+    }
   };
 
   const disconnect = async () => {
@@ -40,30 +61,20 @@ export function WalletProvider({ children }) {
     setBalance(null);
   };
 
-  const refreshBalance = async (wallet = publicKey, cluster = 'devnet') => {
-    if (!wallet) return null;
-    const connection = new Connection(clusterApiUrl(cluster), 'confirmed');
-    const lamports = await connection.getBalance(new PublicKey(wallet));
-    const sol = lamports / LAMPORTS_PER_SOL;
-    setBalance(sol);
-    return sol;
-  };
-
   const payForTicket = async ({ treasuryWallet, ticketPriceLamports, cluster }) => {
     const provider = getProvider();
     if (!provider || !publicKey) throw new Error('Wallet not connected');
 
     const connection = new Connection(clusterApiUrl(cluster), 'confirmed');
-    const fromPubkey = new PublicKey(publicKey);
     const transaction = new Transaction().add(
       SystemProgram.transfer({
-        fromPubkey,
+        fromPubkey: publicKey, // <- já é PublicKey
         toPubkey: new PublicKey(treasuryWallet),
         lamports: Number(ticketPriceLamports)
       })
     );
 
-    transaction.feePayer = fromPubkey;
+    transaction.feePayer = publicKey;
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
     transaction.recentBlockhash = blockhash;
 
@@ -75,7 +86,8 @@ export function WalletProvider({ children }) {
   };
 
   const value = useMemo(() => ({
-    publicKey,
+    publicKey: publicKey?.toBase58() || null, // <- expõe como string pro App
+    publicKeyObject: publicKey, // <- expõe o objeto pra uso interno
     balance,
     error,
     setError,
@@ -84,7 +96,7 @@ export function WalletProvider({ children }) {
     refreshBalance,
     payForTicket,
     hasPhantom: Boolean(getProvider())
-  }), [publicKey, balance, error]);
+  }), [publicKey, balance, error, refreshBalance]);
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 }
@@ -92,4 +104,3 @@ export function WalletProvider({ children }) {
 export function useWallet() {
   return useContext(WalletContext);
 }
-
