@@ -22,10 +22,62 @@
 
     <!-- Segurança básica -->
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+
+    <style>
+      /* Botões de idioma no canto superior direito */
+      #lang-switcher {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        z-index: 9999;
+        display: flex;
+        gap: 8px;
+      }
+      #lang-switcher button {
+        font-size: 24px;
+        background: rgba(0,0,0,0.3);
+        border: none;
+        border-radius: 8px;
+        padding: 4px 8px;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+      #lang-switcher button:hover {
+        transform: scale(1.1);
+      }
+      #lang-switcher button.active {
+        background: rgba(124, 58, 237, 0.8); /* roxo do theme-color */
+      }
+    </style>
   </head>
   <body>
+    <!-- SELETOR DE BANDEIRA VOLTOU -->
+    <div id="lang-switcher"></div>
+
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+
+    <script>
+      // Script simples pra renderizar as bandeiras antes do React subir
+      const languages = [
+        { code: 'pt', flag: '🇧🇷' },
+        { code: 'en', flag: '🇺🇸' },
+        { code: 'zh', flag: '🇨🇳' }
+      ];
+      const currentLang = localStorage.getItem('lang') || 'pt';
+      const container = document.getElementById('lang-switcher');
+
+      languages.forEach(l => {
+        const btn = document.createElement('button');
+        btn.innerText = l.flag;
+        if(l.code === currentLang) btn.classList.add('active');
+        btn.onclick = () => {
+          localStorage.setItem('lang', l.code);
+          window.location.reload();
+        };
+        container.appendChild(btn);
+      });
+    </script>
   </body>
 </html>
 
