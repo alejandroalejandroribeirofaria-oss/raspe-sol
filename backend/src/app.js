@@ -7,7 +7,9 @@ import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 export function createApp() {
   const app = express();
-  app.set('trust proxy', true);
+  
+  // 1 = confia só no 1º proxy. Tira o warning do Render
+  app.set('trust proxy', 1); 
 
   app.use(helmetMiddleware);
   app.use(corsMiddleware);
@@ -15,8 +17,15 @@ export function createApp() {
   app.use(express.json({ limit: '100kb' }));
   app.use(morgan('combined'));
 
+  // ROTA RAIZ - pra nao dar 404
+  app.get('/', (req, res) => {
+    res.json({ status: "Raspe SOL API ON", version: "1.0.0" });
+  });
+
+  // SUAS ROTAS
   app.use('/api', publicRouter);
   app.use('/api/admin', adminRouter);
+
   app.use(notFound);
   app.use(errorHandler);
 
