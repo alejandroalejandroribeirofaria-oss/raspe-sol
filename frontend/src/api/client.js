@@ -1,12 +1,17 @@
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 async function request(path, { method = 'GET', body, adminToken } = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
+  if (adminToken) {
+    headers['x-admin-token'] = adminToken; // <- Aqui tava faltando aplicar
+  }
+
   const response = await fetch(`${API_URL}${path}`, {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(adminToken ? { 'x-admin-token': adminToken } : {})
-    },
+    headers,
     body: body ? JSON.stringify(body) : undefined
   });
 
@@ -40,7 +45,7 @@ export const api = {
     adminToken
   }),
   searchTickets: (query, adminToken) => {
-    const params = new URLSearchParams(Object.entries(query).filter(([, value]) => value));
+    const params = new URLSearchParams(Object.entries(query).filter(([, value]) => value != null && value !== ''));
     return request(`/api/admin/tickets/search?${params.toString()}`, { adminToken });
   },
   markPaid: (uuid, adminToken) => request(`/api/admin/tickets/${uuid}/pay`, {
@@ -49,4 +54,3 @@ export const api = {
   }),
   exportReport: (adminToken) => request('/api/admin/report.csv', { adminToken })
 };
-
