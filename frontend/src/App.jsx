@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Activity, Coins, Languages, Search, ShieldCheck,
-  Sparkles, Ticket, Trophy, Loader2, LockKeyhole // <- Adicionei LockKeyhole
+  Sparkles, Ticket, Trophy, Loader2, LockKeyhole
 } from 'lucide-react';
 import { api } from './api/client.js';
 import { languages, translations } from './i18n/translations.js';
 import { useWallet } from './wallet/WalletContext.jsx';
-
 import ConnectButton from './components/ConnectButton';
 
 const FALLBACK_STATS = {
@@ -22,7 +21,7 @@ const formatSol = (lamports) => {
 
 const short = (value = '') => {
   if (!value) return '—';
-  return value.length > 14? `${value.slice(0, 6)}…${value.slice(-6)}` : value; // <- Corrigido
+  return value.length > 14? `${value.slice(0, 6)}…${value.slice(-6)}` : value;
 };
 
 function StatCard({ icon: Icon, label, value }) {
@@ -114,7 +113,7 @@ function AdminPanel({ t }) {
       <div className="section-title"><LockKeyhole /><h2>{t.admin}</h2></div>
       <label className="field">
         <span>{t.adminToken}</span>
-        <input value={token} onChange={(e) => saveToken(e.target.value)} type="password" />
+        <input value={token} onChange={(e) => saveToken(e.target.value)} type="password" placeholder="Cole o token aqui" />
       </label>
       <div className="admin-actions">
         <button onClick={() => createBatch('manual')}>{t.manualBatch}</button>
@@ -143,7 +142,8 @@ function AdminPanel({ t }) {
 }
 
 export function App() {
-  const [language, setLanguage] = useState('pt');
+  // 1. CORRIGIDO: Carrega idioma do localStorage
+  const [language, setLanguage] = useState(() => localStorage.getItem('raspe_lang') || 'pt');
   const [config, setConfig] = useState(null);
   const [stats, setStats] = useState(FALLBACK_STATS);
   const [leaderboard, setLeaderboard] = useState([]);
@@ -153,14 +153,14 @@ export function App() {
   const [solPrice, setSolPrice] = useState(null);
   const [error, setError] = useState('');
 
-  const { publicKey, balance, connect, disconnect, payForTicket } = useWallet();
+  const { publicKey, balance, connect, payForTicket } = useWallet();
   const t = translations[language];
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+  // 2. CORRIGIDO: Remove /api daqui porque o client.js já adiciona
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-  // Fetch SOL price
   useEffect(() => {
-    fetch(`${API_URL}/price`)
+    fetch(`${API_URL}/api/price`)
      .then(res => res.json())
      .then(data => setSolPrice(data.price))
      .catch(() => setError("Erro ao buscar preço do SOL"));
@@ -198,6 +198,12 @@ export function App() {
     treasuryWallet: import.meta.env.VITE_TREASURY_WALLET || '',
     cluster: import.meta.env.VITE_DEFAULT_CLUSTER || 'devnet'
   }, [config]);
+
+  const handleLanguageChange = (e) => {
+    const newLang = e.target.value;
+    setLanguage(newLang);
+    localStorage.setItem('raspe_lang', newLang);
+  };
 
   const handleConnect = async () => {
     setBusy('connect');
@@ -251,28 +257,24 @@ export function App() {
       <div className="orb orb-b" />
 
       <header style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem'}}>
-  <h1>Raspe SOL</h1>
+        <h1>Raspe SOL</h1>
+        <div style={{display: 'flex', gap: '1rem', alignItems: 'center'}}>
+          <Languages size={18} />
+          <select
+            value={language}
+            onChange={handleLanguageChange}
+            className="bg-transparent border border-white/20 rounded px-2 py-1"
+          >
+            {Object.keys(languages).map(key => (
+              <option key={key} value={key} style={{background: '#111', color: '#fff'}}>
+                {languages[key]}
+              </option>
+            ))}
+          </select>
+          <ConnectButton />
+        </div>
+      </header>
 
-  <div style={{display: 'flex', gap: '1rem', alignItems: 'center'}}>
-    <Languages size={18} />
-    <select
-      value={language}
-      onChange={(e) => {
-        setLanguage(e.target.value);
-        localStorage.setItem('raspe_lang', e.target.value); // salva
-      }}
-      className="bg-transparent border border-white/20 rounded px-2 py-1"
-    >
-      {Object.keys(languages).map(key => (
-        <option key={key} value={key} style={{background: '#111', color: '#fff'}}>
-          {languages[key]}
-        </option>
-      ))}
-    </select>
-    <ConnectButton />
-  </div>
-</header>
-   
       <section className="hero">
         <p className="eyebrow"><ShieldCheck size={16} /> HMAC SHA-256 · Solana · Prisma</p>
         <h1>{t.title}</h1>
@@ -284,7 +286,7 @@ export function App() {
           </button>
           <span className="price-pill">
             {t.price}: {formatSol(activeConfig.ticketPriceLamports)}
-            {solPrice && ` (~R$ ${solPrice.toFixed(2)})`} {/* <- Mostra preço em R$ */}
+            {solPrice && ` (~R$ ${solPrice.toFixed(2)})`}
           </span>
         </div>
         {error && <p style={{color: 'red'}}>{error}</p>}
