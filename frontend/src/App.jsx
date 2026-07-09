@@ -250,11 +250,29 @@ export function App() {
       <div className="orb orb-a" />
       <div className="orb orb-b" />
 
-      <header style={{display: 'flex', justifyContent: 'space-between', padding: '1rem'}}>
-        <h1>Raspe SOL</h1>
-        <ConnectButton />
-      </header>
+      <header style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem'}}>
+  <h1>Raspe SOL</h1>
 
+  <div style={{display: 'flex', gap: '1rem', alignItems: 'center'}}>
+    <Languages size={18} />
+    <select
+      value={language}
+      onChange={(e) => {
+        setLanguage(e.target.value);
+        localStorage.setItem('raspe_lang', e.target.value); // salva
+      }}
+      className="bg-transparent border border-white/20 rounded px-2 py-1"
+    >
+      {Object.keys(languages).map(key => (
+        <option key={key} value={key} style={{background: '#111', color: '#fff'}}>
+          {languages[key]}
+        </option>
+      ))}
+    </select>
+    <ConnectButton />
+  </div>
+</header>
+   
       <section className="hero">
         <p className="eyebrow"><ShieldCheck size={16} /> HMAC SHA-256 · Solana · Prisma</p>
         <h1>{t.title}</h1>
