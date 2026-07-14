@@ -5,6 +5,7 @@ import {
   WalletProvider as SolanaWalletProvider,
   useConnection,
   useWallet as useAdapterWallet,
+  WalletReadyState, // <- IMPORTANTE PRA NAO DAR TELA PRETA
 } from '@solana/wallet-adapter-react';
 import {
   PhantomWalletAdapter,
@@ -12,49 +13,39 @@ import {
   CoinbaseWalletAdapter,
   LedgerWalletAdapter,
   CloverWalletAdapter,
-  NightlyWalletAdapter, // <- GlowWalletAdapter removido
+  NightlyWalletAdapter,
   TrustWalletAdapter,
 } from '@solana/wallet-adapter-wallets';
 import { WalletContext } from './WalletContext.jsx';
 
 const RPC_URL = import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
-function buildAdapters() {
-  return [
-    new PhantomWalletAdapter(),
-    new SolflareWalletAdapter(),
-    new CoinbaseWalletAdapter(),
-    new NightlyWalletAdapter(),
-    new CloverWalletAdapter(),
-    // new GlowWalletAdapter(), <- apaguei essa linha
-    new TrustWalletAdapter(),
-    new LedgerWalletAdapter(),
-  ];
-}
+const buildAdapters = () => [
+  new PhantomWalletAdapter(),
+  new SolflareWalletAdapter(),
+  new CoinbaseWalletAdapter(),
+  new NightlyWalletAdapter(),
+  new CloverWalletAdapter(),
+  new TrustWalletAdapter(),
+  new LedgerWalletAdapter(),
+];
 
 const BALANCE_POLL_MS = 30_000;
-const NETWORK_POLL_MS = 20_000;
 
 function WalletBridge({ children }) {
   const { connection } = useConnection();
-  const adapterWallet = useAdapterWallet();
-  const { wallet, wallets, publicKey, connected, connecting, disconnecting, select, connect, disconnect, sendTransaction } = adapterWallet;
+  const { wallet, wallets, publicKey, connected, connecting, disconnecting, select, connect, disconnect, sendTransaction } = useAdapterWallet();
 
   const [balanceLamports, setBalanceLamports] = useState(null);
   const [status, setStatus] = useState('idle');
   const [errorMessage, setErrorMessage] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [networkMismatch, setNetworkMismatch] = useState(false);
-  const initialGenesisHash = useRef(null);
   const pendingConnectRef = useRef(null);
 
-  const address = publicKey? publicKey.toBase58() : null;
+  const address = publicKey?.toBase58()?? null;
 
   const refreshBalance = useCallback(async () => {
-    if (!publicKey) {
-      setBalanceLamports(null);
-      return;
-    }
+    if (!publicKey) return setBalanceLamports(null);
     try {
       const lamports = await connection.getBalance(publicKey, 'confirmed');
       setBalanceLamports(lamports);
@@ -73,37 +64,15 @@ function WalletBridge({ children }) {
   }, [connection, publicKey, refreshBalance]);
 
   useEffect(() => {
-    let cancelled = false;
-    connection.getGenesisHash().then((hash) => {
-      if (!cancelled) initialGenesisHash.current = hash;
-    }).catch(() => {});
-
-    const interval = setInterval(async () => {
-      try {
-        const hash = await connection.getGenesisHash();
-        if (initialGenesisHash.current && hash!== initialGenesisHash.current) {
-          setNetworkMismatch(true);
-        }
-      } catch {}
-    }, NETWORK_POLL_MS);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [connection]);
-
-  useEffect(() => {
     if (connecting) return setStatus('connecting');
     if (connected && publicKey) return setStatus('connected');
-    if (wallet?.readyState === 'NotDetected') return setStatus('not_installed');
+    if (wallet?.adapter?.readyState === WalletReadyState.NotDetected) return setStatus('not_installed'); // <- AQUI ERA O BUG
     setStatus('idle');
   }, [connecting, connected, publicKey, wallet]);
 
   useEffect(() => {
     const pending = pendingConnectRef.current;
-    if (!pending) return;
-    if (wallet?.adapter?.name!== pending.name) return;
+    if (!pending || wallet?.adapter?.name!== pending.name) return;
 
     pendingConnectRef.current = null;
     connect()
@@ -113,9 +82,8 @@ function WalletBridge({ children }) {
       })
      .catch((err) => {
         const name = err?.name || '';
-        if (name === 'WalletNotReadyError') {
-          setStatus('not_installed');
-        } else if (name === 'WalletConnectionError' || /locked/i.test(err?.message || '')) {
+        if (name === 'WalletNotReadyError') setStatus('not_installed');
+        else if (name === 'WalletConnectionError' || /locked/i.test(err?.message || '')) {
           setStatus('locked');
           setErrorMessage('walletLocked');
         } else {
@@ -130,20 +98,7 @@ function WalletBridge({ children }) {
     (walletName) => {
       setErrorMessage(null);
       if (wallet?.adapter?.name === walletName) {
-        return connect()
-         .then(() => setModalOpen(false))
-         .catch((err) => {
-            const name = err?.name || '';
-            if (name === 'WalletNotReadyError') setStatus('not_installed');
-            else if (name === 'WalletConnectionError' || /locked/i.test(err?.message || '')) {
-              setStatus('locked');
-              setErrorMessage('walletLocked');
-            } else {
-              setStatus('error');
-              setErrorMessage(err?.message || 'CONNECT_FAILED');
-            }
-            throw err;
-          });
+        return connect().then(() => setModalOpen(false)).catch((err) => { throw err; });
       }
       return new Promise((resolve, reject) => {
         pendingConnectRef.current = { name: walletName, resolve, reject };
@@ -154,13 +109,9 @@ function WalletBridge({ children }) {
   );
 
   const disconnectWallet = useCallback(async () => {
-    try {
-      await disconnect();
-    } finally {
-      setBalanceLamports(null);
-      setStatus('idle');
-      setNetworkMismatch(false);
-    }
+    await disconnect();
+    setBalanceLamports(null);
+    setStatus('idle');
   }, [disconnect]);
 
   const sendPayment = useCallback(
@@ -168,63 +119,39 @@ function WalletBridge({ children }) {
       if (!publicKey) throw new Error('WALLET_NOT_CONNECTED');
       const toPubkey = new PublicKey(toWallet);
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
-      const tx = new Transaction({ feePayer: publicKey, blockhash, lastValidBlockHeight }).add(
-        SystemProgram.transfer({ fromPubkey: publicKey, toPubkey, lamports })
-      );
-      const signature = await sendTransaction(tx, connection);
-      return signature;
+      const tx = new Transaction({ feePayer: publicKey, blockhash, lastValidBlockHeight })
+       .add(SystemProgram.transfer({ fromPubkey: publicKey, toPubkey, lamports }));
+      return await sendTransaction(tx, connection);
     },
     [publicKey, connection, sendTransaction]
   );
 
-  const value = useMemo(
-    () => ({
-      address,
-      publicKey,
-      balanceLamports,
-      status,
-      errorMessage,
-      connecting,
-      disconnecting,
-      networkMismatch,
-      walletName: wallet?.adapter?.name?? null,
-      walletIcon: wallet?.adapter?.icon?? null,
-      wallets,
-      modalOpen,
-      openModal: () => setModalOpen(true),
-      closeModal: () => setModalOpen(false),
-      connect: connectWallet,
-      disconnect: disconnectWallet,
-      refreshBalance,
-      sendPayment,
-      connection,
-    }),
-    [
-      address,
-      publicKey,
-      balanceLamports,
-      status,
-      errorMessage,
-      connecting,
-      disconnecting,
-      networkMismatch,
-      wallet,
-      wallets,
-      modalOpen,
-      connectWallet,
-      disconnectWallet,
-      refreshBalance,
-      sendPayment,
-      connection,
-    ]
-  );
+  const value = useMemo(() => ({
+    address,
+    publicKey,
+    balanceLamports,
+    status,
+    errorMessage,
+    connecting,
+    disconnecting,
+    walletName: wallet?.adapter?.name?? null,
+    walletIcon: wallet?.adapter?.icon?? null,
+    wallets,
+    modalOpen,
+    openModal: () => setModalOpen(true),
+    closeModal: () => setModalOpen(false),
+    connect: connectWallet,
+    disconnect: disconnectWallet,
+    refreshBalance,
+    sendPayment,
+    connection,
+  }), [address, publicKey, balanceLamports, status, errorMessage, connecting, disconnecting, wallet, wallets, modalOpen, connectWallet, disconnectWallet, refreshBalance, sendPayment, connection]);
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 }
 
 export function WalletProvider({ children }) {
   const adapters = useMemo(buildAdapters, []);
-
   return (
     <ConnectionProvider endpoint={RPC_URL}>
       <SolanaWalletProvider wallets={adapters} autoConnect onError={() => {}}>
