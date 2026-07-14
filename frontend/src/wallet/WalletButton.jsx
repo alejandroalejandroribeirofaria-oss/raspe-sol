@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useI18n } from '../i18n/I18nContext';
-import { useWallet } from './useWallet.js';
+import { useWallet } from './useWallet.js'; // <- esse hook usa teu WalletContext
 import { shortenAddress, formatSol, copyToClipboard, WALLET_READY_STATE } from './walletUtils.js';
 import { audioManager } from '../audio/AudioManager.js';
 
@@ -12,23 +12,24 @@ export default function WalletButton() {
     status,
     walletName,
     walletIcon,
-    wallets,
+    wallets = [], // <- adiciona default pra não quebrar
     openModal,
     connect,
     disconnect,
     networkMismatch,
   } = useWallet();
+
   const [copied, setCopied] = useState(false);
 
   const handleConnectClick = async () => {
-    audioManager.play('click');
+    try { audioManager.play('click'); } catch {}
     const installed = wallets.filter((w) => w.readyState === WALLET_READY_STATE.INSTALLED);
     if (installed.length === 1) {
       try {
         await connect(installed[0].adapter.name);
-        audioManager.play('walletConnect');
+        try { audioManager.play('walletConnect'); } catch {}
       } catch {
-        // status already reflects the failure (locked / error)
+        // erro já tratado no Provider
       }
       return;
     }
@@ -36,14 +37,15 @@ export default function WalletButton() {
   };
 
   const handleDisconnect = () => {
-    audioManager.play('walletDisconnect');
+    try { audioManager.play('walletDisconnect'); } catch {}
     disconnect();
   };
 
   const handleCopy = async () => {
+    if (!address) return;
     const ok = await copyToClipboard(address);
     if (ok) {
-      audioManager.play('click');
+      try { audioManager.play('click'); } catch {}
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     }
@@ -56,7 +58,7 @@ export default function WalletButton() {
         {walletIcon && <img src={walletIcon} alt={walletName} className="wallet-panel__icon" />}
         <span className="wallet-panel__balance">{formatSol(balanceLamports)}</span>
         <button className="wallet-panel__address" onClick={handleCopy}>
-          {copied ? t('copied') : shortenAddress(address)}
+          {copied? t('copied') : shortenAddress(address)}
         </button>
         <button className="wallet-panel__disconnect" onClick={handleDisconnect} aria-label={t('disconnect')}>
           ⏻
