@@ -12,19 +12,13 @@ import {
   CoinbaseWalletAdapter,
   LedgerWalletAdapter,
   CloverWalletAdapter,
-  GlowWalletAdapter,
-  NightlyWalletAdapter,
+  NightlyWalletAdapter, // <- GlowWalletAdapter removido
   TrustWalletAdapter,
 } from '@solana/wallet-adapter-wallets';
 import { WalletContext } from './WalletContext.jsx';
 
 const RPC_URL = import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
-// Explicit adapters for wallets without full Wallet Standard auto-discovery
-// in every browser. Wallets that already implement the Wallet Standard
-// (Backpack, and increasingly Phantom/Solflare/Glow/Nightly themselves) are
-// picked up automatically by the adapter registry on top of this list —
-// listing them here too is harmless, the registry de-dupes by name.
 function buildAdapters() {
   return [
     new PhantomWalletAdapter(),
@@ -32,7 +26,7 @@ function buildAdapters() {
     new CoinbaseWalletAdapter(),
     new NightlyWalletAdapter(),
     new CloverWalletAdapter(),
-    new GlowWalletAdapter(),
+    // new GlowWalletAdapter(), <- apaguei essa linha
     new TrustWalletAdapter(),
     new LedgerWalletAdapter(),
   ];
@@ -41,28 +35,20 @@ function buildAdapters() {
 const BALANCE_POLL_MS = 30_000;
 const NETWORK_POLL_MS = 20_000;
 
-/**
- * Bridges @solana/wallet-adapter-react's internal state into our own
- * WalletContext, adding: balance tracking, a friendlier `status` enum,
- * best-effort network-change detection, and a modal open/close flag.
- *
- * This is the ONLY component that calls the adapter's useWallet/useConnection
- * hooks — everything else in the app goes through wallet/useWallet.js.
- */
 function WalletBridge({ children }) {
   const { connection } = useConnection();
   const adapterWallet = useAdapterWallet();
   const { wallet, wallets, publicKey, connected, connecting, disconnecting, select, connect, disconnect, sendTransaction } = adapterWallet;
 
   const [balanceLamports, setBalanceLamports] = useState(null);
-  const [status, setStatus] = useState('idle'); // idle | connecting | connected | locked | not_installed | error
+  const [status, setStatus] = useState('idle');
   const [errorMessage, setErrorMessage] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [networkMismatch, setNetworkMismatch] = useState(false);
   const initialGenesisHash = useRef(null);
-  const pendingConnectRef = useRef(null); // { name, resolve, reject }
+  const pendingConnectRef = useRef(null);
 
-  const address = publicKey ? publicKey.toBase58() : null;
+  const address = publicKey? publicKey.toBase58() : null;
 
   const refreshBalance = useCallback(async () => {
     if (!publicKey) {
@@ -72,14 +58,9 @@ function WalletBridge({ children }) {
     try {
       const lamports = await connection.getBalance(publicKey, 'confirmed');
       setBalanceLamports(lamports);
-    } catch {
-      // Transient RPC hiccup — keep the last known balance rather than
-      // flashing an error over a stale-but-still-useful number.
-    }
+    } catch {}
   }, [connection, publicKey]);
 
-  // Balance: fetch on connect, then keep fresh via account-change
-  // subscription (instant) plus a slow poll as a fallback.
   useEffect(() => {
     if (!publicKey) return;
     refreshBalance();
@@ -91,11 +72,6 @@ function WalletBridge({ children }) {
     };
   }, [connection, publicKey, refreshBalance]);
 
-  // Best-effort network-change detection. Solana wallets don't expose a
-  // standardized "network changed" event the way EIP-1193 does for EVM
-  // chains, so this compares the RPC's genesis hash over time — it catches
-  // the dApp's own endpoint changing, which is the one signal available
-  // consistently across wallets.
   useEffect(() => {
     let cancelled = false;
     connection.getGenesisHash().then((hash) => {
@@ -105,12 +81,10 @@ function WalletBridge({ children }) {
     const interval = setInterval(async () => {
       try {
         const hash = await connection.getGenesisHash();
-        if (initialGenesisHash.current && hash !== initialGenesisHash.current) {
+        if (initialGenesisHash.current && hash!== initialGenesisHash.current) {
           setNetworkMismatch(true);
         }
-      } catch {
-        // RPC unreachable — don't flag a false mismatch.
-      }
+      } catch {}
     }, NETWORK_POLL_MS);
 
     return () => {
@@ -119,8 +93,6 @@ function WalletBridge({ children }) {
     };
   }, [connection]);
 
-  // Derive a friendlier status than the adapter's raw booleans, and surface
-  // "locked" / "not installed" as distinct, actionable states.
   useEffect(() => {
     if (connecting) return setStatus('connecting');
     if (connected && publicKey) return setStatus('connected');
@@ -128,22 +100,18 @@ function WalletBridge({ children }) {
     setStatus('idle');
   }, [connecting, connected, publicKey, wallet]);
 
-  // `select()` only requests a wallet switch — the adapter instance in
-  // `wallet` doesn't update until the next render. Connecting from an effect
-  // that watches for that switch (instead of connecting right after
-  // `select()`) avoids calling connect() on the previous adapter.
   useEffect(() => {
     const pending = pendingConnectRef.current;
     if (!pending) return;
-    if (wallet?.adapter?.name !== pending.name) return;
+    if (wallet?.adapter?.name!== pending.name) return;
 
     pendingConnectRef.current = null;
     connect()
-      .then(() => {
+     .then(() => {
         setModalOpen(false);
         pending.resolve();
       })
-      .catch((err) => {
+     .catch((err) => {
         const name = err?.name || '';
         if (name === 'WalletNotReadyError') {
           setStatus('not_installed');
@@ -162,11 +130,9 @@ function WalletBridge({ children }) {
     (walletName) => {
       setErrorMessage(null);
       if (wallet?.adapter?.name === walletName) {
-        // Already the active adapter — no `select` state change will fire,
-        // so connect immediately instead of waiting on the effect below.
         return connect()
-          .then(() => setModalOpen(false))
-          .catch((err) => {
+         .then(() => setModalOpen(false))
+         .catch((err) => {
             const name = err?.name || '';
             if (name === 'WalletNotReadyError') setStatus('not_installed');
             else if (name === 'WalletConnectionError' || /locked/i.test(err?.message || '')) {
@@ -221,8 +187,8 @@ function WalletBridge({ children }) {
       connecting,
       disconnecting,
       networkMismatch,
-      walletName: wallet?.adapter?.name ?? null,
-      walletIcon: wallet?.adapter?.icon ?? null,
+      walletName: wallet?.adapter?.name?? null,
+      walletIcon: wallet?.adapter?.icon?? null,
       wallets,
       modalOpen,
       openModal: () => setModalOpen(true),
@@ -256,11 +222,6 @@ function WalletBridge({ children }) {
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 }
 
-/**
- * Top-level provider — mount this once near the root (see main.jsx). Every
- * component in the tree shares this single wallet instance; there is no
- * other place in the codebase that instantiates wallet-adapter state.
- */
 export function WalletProvider({ children }) {
   const adapters = useMemo(buildAdapters, []);
 
