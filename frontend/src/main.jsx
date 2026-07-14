@@ -1,40 +1,28 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App.jsx'
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App.jsx';
+import { I18nProvider } from './i18n/I18nContext';
+import { WalletProvider } from './wallet/WalletProvider.jsx';
+import { ChatProvider } from './chat/ChatProvider.jsx';
+import AdminApp from './admin/AdminApp.jsx';
+import './styles/index.css';
 
-// Tenta iniciar o AppKit, se der erro só ignora e continua
-const initAppKit = async () => {
-  try {
-    const { createAppKit } = await import('@reown/appkit/react')
-    const { SolanaAdapter } = await import('@reown/appkit-adapter-solana/react')
-    const { solana } = await import('@reown/appkit/networks')
+const isAdminRoute = window.location.pathname.startsWith('/admin');
 
-    const projectId = import.meta.env.VITE_WC_PROJECT_ID
-
-    if(projectId) {
-      const solanaAdapter = new SolanaAdapter()
-      createAppKit({
-        adapters: [solanaAdapter],
-        projectId,
-        networks: [solana],
-        defaultNetwork: solana,
-        metadata: {
-          name: 'Raspe Sol',
-          description: 'Raspe e Ganhe',
-          url: 'https://raspe-sol-oficial.onrender.com',
-          icons: ['https://raspe-sol-oficial.onrender.com/logo.png']
-        }
-      })
-    }
-  } catch (e) {
-    console.error("AppKit falhou:", e) // se quebrar não trava a tela
-  }
-}
-
-initAppKit()
-
-ReactDOM.createRoot(document.getElementById('root')).render(
+const root = (
   <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
+    {isAdminRoute ? (
+      <AdminApp />
+    ) : (
+      <I18nProvider>
+        <WalletProvider>
+          <ChatProvider>
+            <App />
+          </ChatProvider>
+        </WalletProvider>
+      </I18nProvider>
+    )}
+  </React.StrictMode>
+);
+
+ReactDOM.createRoot(document.getElementById('root')).render(root);
