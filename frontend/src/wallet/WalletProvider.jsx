@@ -5,8 +5,8 @@ import {
   WalletProvider as SolanaWalletProvider,
   useConnection,
   useWallet as useAdapterWallet,
-  WalletReadyState,
 } from '@solana/wallet-adapter-react';
+import { WalletReadyState } from '@solana/wallet-adapter-base'; // <- ADICIONA ESSA LINHA
 import {
   PhantomWalletAdapter,
   SolflareWalletAdapter,
@@ -17,7 +17,6 @@ import {
   TrustWalletAdapter,
 } from '@solana/wallet-adapter-wallets';
 import { WalletContext } from './WalletContext.jsx';
-
 const RPC_URL = import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
 const buildAdapters = () => [
