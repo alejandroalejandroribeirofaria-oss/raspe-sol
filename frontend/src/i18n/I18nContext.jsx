@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useMemo, useState, useEffect } from 'react';
 import en from './en.json';
 import pt from './pt.json';
 import zh from './zh.json';
@@ -13,17 +13,24 @@ export const LANGUAGES = [
 const I18nCtx = createContext(null);
 
 function detectDefaultLang() {
+  if (typeof window === 'undefined') return 'pt'; // <- ESSA LINHA SALVA TUDO
   const nav = (navigator.language || 'pt').slice(0, 2);
-  return DICTS[nav] ? nav : 'pt';
+  return DICTS[nav]? nav : 'pt';
 }
 
 export function I18nProvider({ children }) {
-  const [lang, setLang] = useState(detectDefaultLang());
+  const [lang, setLang] = useState('pt'); // <- começa em pt pra não quebrar
+
+  useEffect(() => {
+    setLang(detectDefaultLang()); // <- só detecta depois que carregar no navegador
+  }, []);
+
   const value = useMemo(() => {
-    const dict = DICTS[lang];
-    const t = (key) => dict[key] ?? key;
+    const dict = DICTS[lang] || DICTS['pt']; // <- fallback se não achar
+    const t = (key) => dict[key]?? key;
     return { lang, setLang, t };
   }, [lang]);
+
   return <I18nCtx.Provider value={value}>{children}</I18nCtx.Provider>;
 }
 
