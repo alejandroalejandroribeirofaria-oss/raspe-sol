@@ -7,7 +7,7 @@ import BuyFlow from './components/BuyFlow';
 import VolumeControl from './components/VolumeControl';
 import WalletButton from './wallet/WalletButton.jsx';
 import WalletModal from './wallet/WalletModal.jsx';
-import ChatToggleButton from './components/ChatToggleButton.jsx';
+import ChatToggleButton from './chat/ChatToggleButton.jsx';
 import ChatWindow from './chat/ChatWindow.jsx';
 import MyTicketsPanel from './tickets/MyTicketsPanel.jsx';
 import PendingPrizeBanner from './tickets/PendingPrizeBanner.jsx';
