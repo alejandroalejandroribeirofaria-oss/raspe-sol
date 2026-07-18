@@ -1,7 +1,6 @@
-import { useI18n } from '../i18n/I18nContext';
+import { useI18n } from '../i18n/I18nProvider'
 
-export default function PrizeClaimResult({ prizeSol, onViewTickets }) {
-  const { t } = useI18n();
+const { t } = useI18n()
 
   return (
     <div className="claim-result">
