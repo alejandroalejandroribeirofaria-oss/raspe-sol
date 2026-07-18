@@ -1,4 +1,4 @@
-import { I18nProvider } from '../i18n/I18nContext';
+import { I18nProvider } from '../i18n/I18nProvider';
 import AdminDashboard from './AdminDashboard.jsx';
 import '../styles/index.css';
 
