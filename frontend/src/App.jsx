@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useI18n } from './i18n/I18nContext';
+import { I18nProvider } from './i18n/I18nProvider'
 import { useAudioBoot } from './hooks/useAudioBoot';
 import { api } from './api';
 import LanguageSwitch from './components/LanguageSwitch';
