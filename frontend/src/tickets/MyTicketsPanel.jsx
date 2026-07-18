@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useI18n } from '../i18n/I18nProvider'
-import { useWallet } from '../wallet/useWallet.js';  // <- ADICIONA ISSO
+import { useWallet } from '../wallet/useWallet.js';  // <- ESSA LINHA AQUI Ó
 import { shortenAddress } from '../wallet/walletUtils.js';
 import { api } from '../api.js';
 function statusBadge(ticket, t) {
