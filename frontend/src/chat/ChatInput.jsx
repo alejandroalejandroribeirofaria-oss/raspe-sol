@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import EmojiPicker from './EmojiPicker.jsx';
 import { shortenAddress } from '../wallet/walletUtils.js';
 import { audioManager } from '../audio/AudioManager.js';
+import { useI18n } from '../i18n/I18nProvider'; // ADICIONA ISSO
 
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -12,9 +13,11 @@ export default function ChatInput({
   onCancelReply,
   onSend,
   onTyping,
-  uploadImage,
-  t
+  uploadImage
+  // t REMOVIDO DAQUI
 }) {
+  const { t } = useI18n(); // ADICIONA ISSO
+
   const [text, setText] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -119,7 +122,7 @@ export default function ChatInput({
         <button
           type="button"
           className="chat-input__icon-btn"
-          onClick={() => setPickerOpen((o) => !o)}
+          onClick={() => setPickerOpen((o) =>!o)}
           aria-label="Emoji"
         >
           😀
@@ -132,7 +135,7 @@ export default function ChatInput({
           disabled={uploading}
           aria-label="Attach image"
         >
-          {uploading ? '…' : '📎'}
+          {uploading? '…' : '📎'}
         </button>
 
         <input
@@ -166,4 +169,4 @@ export default function ChatInput({
       </form>
     </div>
   );
-  }
+}
