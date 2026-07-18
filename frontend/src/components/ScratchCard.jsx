@@ -3,15 +3,14 @@ import { useI18n } from '../i18n/I18nProvider'
 import { audioManager } from '../audio/AudioManager.js';
 import { resultEffectForPrize } from '../audio/config.js';
 
-const { T } = userI18n()
 const REVEAL_THRESHOLD = 0.55; // fraction of foil scratched before auto-clearing
 
 export default function ScratchCard({ prizeLabel, prizeLamports = 0, onRevealed }) {
+  const { t } = useI18n();
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const scratching = useRef(false);
   const [revealed, setRevealed] = useState(false);
-  const { t } = useI18n();
   const won = prizeLamports > 0;
 
   const paintFoil = useCallback((canvas) => {
@@ -74,7 +73,7 @@ export default function ScratchCard({ prizeLabel, prizeLamports = 0, onRevealed 
       if (data[i] === 0) cleared++;
     }
     const total = data.length / (4 * 8);
-    if (cleared / total > REVEAL_THRESHOLD && !revealed) {
+    if (cleared / total > REVEAL_THRESHOLD &&!revealed) {
       setRevealed(true);
       audioManager.play(resultEffectForPrize(prizeLamports));
       if (won) audioManager.play('confetti');
@@ -85,7 +84,7 @@ export default function ScratchCard({ prizeLabel, prizeLamports = 0, onRevealed 
   const pointFromEvent = (evt) => {
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    const point = evt.touches ? evt.touches[0] : evt;
+    const point = evt.touches? evt.touches[0] : evt;
     return { x: point.clientX - rect.left, y: point.clientY - rect.top };
   };
 
@@ -111,15 +110,15 @@ export default function ScratchCard({ prizeLabel, prizeLamports = 0, onRevealed 
   useEffect(() => () => audioManager.stopLoop('scratchLoop'), []);
 
   return (
-    <div className={`scratch-card ${won ? 'scratch-card--win' : ''}`}>
+    <div className={`scratch-card ${won? 'scratch-card--win' : ''}`}>
       <div className="scratch-card__prize">
-        <span className="scratch-card__prize-label">{won ? t('youWon') : t('betterLuck')}</span>
+        <span className="scratch-card__prize-label">{won? t('youWon') : t('betterLuck')}</span>
         <span className="scratch-card__prize-value">{prizeLabel}</span>
       </div>
       <div className="scratch-card__foil-wrap" ref={wrapRef}>
         <canvas
           ref={canvasRef}
-          className={`scratch-card__canvas ${revealed ? 'is-cleared' : ''}`}
+          className={`scratch-card__canvas ${revealed? 'is-cleared' : ''}`}
           onMouseDown={handleStart}
           onMouseMove={handleMove}
           onMouseUp={handleEnd}
@@ -132,4 +131,4 @@ export default function ScratchCard({ prizeLabel, prizeLamports = 0, onRevealed 
       <p className="scratch-card__hint">{t('scratchInstructions')}</p>
     </div>
   );
-}
+    }
