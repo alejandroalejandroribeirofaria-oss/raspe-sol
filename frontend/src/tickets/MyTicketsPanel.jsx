@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useI18n } from '../i18n/I18nProvider'
+export default function ChatWindow() {
+const { t } = useI18n();
 import { useWallet } from '../wallet/useWallet.js';  // <- ESSA LINHA AQUI Ó
 import { shortenAddress } from '../wallet/walletUtils.js';
 import { api } from '../api.js';
