@@ -1,32 +1,34 @@
-import { createContext, useContext, useState } from 'react'
-import { useWallet } from '../wallet/WalletProvider'
+import { createContext, useCallback, useEffect, useMemo, useState, useContext } from 'react'; // add useContext aqui
+import {
+  ConnectionProvider,
+  WalletProvider as SolanaWalletProvider,
+  useWallet as useSolanaWallet,
+  useConnection,
+} from '@solana/wallet-adapter-react';
+import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
+import {
+  PhantomWalletAdapter,
+  SolflareWalletAdapter,
+} from '@solana/wallet-adapter-wallets';
+import {
+  clusterApiUrl,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+} from '@solana/web3.js';
 
-const ChatContext = createContext(null)
+import '@solana/wallet-adapter-react-ui/styles.css';
 
-export const useChat = () => {
-  const ctx = useContext(ChatContext)
-  if (!ctx) throw new Error('useChat must be used within ChatProvider')
+export const WalletContext = createContext(null);
+
+// COLA ESSA FUNÇÃO AQUI EMBAIXO
+export const useWallet = () => {
+  const ctx = useContext(WalletContext)
+  if (!ctx) throw new Error('useWallet must be used within <WalletProvider>')
   return ctx
 }
 
-export function ChatProvider({ children }) {
-  const wallet = useWallet() // AQUI DENTRO TA CERTO
-  
-  const [isOpen, setIsOpen] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
+const endpoint = clusterApiUrl('mainnet-beta');
 
-  const value = {
-    isOpen,
-    setIsOpen,
-    unreadCount,
-    setUnreadCount,
-    walletAddress: wallet.address, // usa a carteira aqui
-    connected: wallet.connected
-  }
-
-  return (
-    <ChatContext.Provider value={value}>
-      {children}
-    </ChatContext.Provider>
-  )
-}
+function WalletBridge({ children }) {
+  // ... resto do seu código igual
