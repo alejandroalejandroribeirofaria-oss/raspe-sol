@@ -3,8 +3,6 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-
-  // ← Adicione isso
   base: '/',
 
   server: {
@@ -12,6 +10,8 @@ export default defineConfig({
   },
 
   build: {
+    outDir: 'dist_FINAL_AGORA', // <-- COLOCA ESSA LINHA
+    emptyOutDir: true,          // <-- E ESSA
     chunkSizeWarningLimit: 1000,
 
     rollupOptions: {
