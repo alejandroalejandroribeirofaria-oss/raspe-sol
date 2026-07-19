@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useChat } from './useChat.js';
 import { useWallet } from '../wallet/WalletProvider'
 import { useI18n } from '../i18n/I18nProvider';
 import ChatMessage from './ChatMessage.jsx';
