@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from 'react'
-import { useAppWallet } from '../wallet/WalletProvider'
+import { useWallet } from '../wallet/WalletProvider' // <- MUDOU AQUI
 
 const ChatContext = createContext(null)
 
@@ -10,7 +10,7 @@ export const useChat = () => {
 }
 
 export function ChatProvider({ children }) {
-  const wallet = useAppWallet()
+  const wallet = useWallet() // <- MUDOU AQUI TAMBEM
   
   const [isOpen, setIsOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
