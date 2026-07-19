@@ -5,24 +5,34 @@ import {
   useWallet as useSolanaWallet,
   useConnection,
 } from '@solana/wallet-adapter-react';
-import { WalletModalProvider, useWalletModal } from '@solana/wallet-adapter-react-ui';
-import { SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
-import { 
-  clusterApiUrl, 
-  Transaction, 
-  SystemProgram, 
-  PublicKey, // <- ADICIONADO
-  LAMPORTS_PER_SOL 
+import {
+  WalletModalProvider,
+  useWalletModal,
+} from '@solana/wallet-adapter-react-ui';
+import {
+  PhantomWalletAdapter,
+  SolflareWalletAdapter,
+} from '@solana/wallet-adapter-wallets';
+import {
+  clusterApiUrl,
+  Transaction,
+  SystemProgram,
+  PublicKey,
 } from '@solana/web3.js';
+
 import '@solana/wallet-adapter-react-ui/styles.css';
 
 export const WalletContext = createContext(null);
 
 export function useWallet() {
   const ctx = useContext(WalletContext);
+
   if (!ctx) {
-    throw new Error('useWallet must be used within <WalletProvider>. Did you forget to wrap the app?');
+    throw new Error(
+      'useWallet must be used within <WalletProvider>.'
+    );
   }
+
   return ctx;
 }
 
@@ -32,58 +42,118 @@ function WalletBridge({ children }) {
   const solanaWallet = useSolanaWallet();
   const { connection } = useConnection();
   const { setVisible } = useWalletModal();
+
   const [address, setAddress] = useState(null);
+  const [balanceLamports, setBalanceLamports] = useState(0);
 
   useEffect(() => {
-    setAddress(solanaWallet.publicKey? solanaWallet.publicKey.toBase58() : null);
+    setAddress(
+      solanaWallet.publicKey
+        ? solanaWallet.publicKey.toBase58()
+        : null
+    );
   }, [solanaWallet.publicKey]);
 
-  // CORRIGIDO: PublicKey + signAndSendTransaction
-  const sendPayment = useCallback(async (toWallet, lamports) => {
-    if (!solanaWallet.publicKey) throw new Error('Wallet not connected');
-    if (!solanaWallet.sendTransaction) throw new Error('Wallet does not support sending transactions');
-    
-    const transaction = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: solanaWallet.publicKey,
-        toPubkey: new PublicKey(toWallet), // <- CORRIGIDO: converte string pra PublicKey
-        lamports: Number(lamports), // <- garante que é number
-      })
-    );
-    
-    transaction.feePayer = solanaWallet.publicKey;
-    transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-
-    // CORRIGIDO: usa sendTransaction que funciona em TODAS as wallets
-    const signature = await solanaWallet.sendTransaction(transaction, connection);
-    await connection.confirmTransaction(signature, 'confirmed');
-    return signature;
-  }, [solanaWallet, connection]);
-
   const refreshBalance = useCallback(async () => {
-    if(solanaWallet.publicKey) {
-      return await connection.getBalance(solanaWallet.publicKey)
+    if (!solanaWallet.publicKey) {
+      setBalanceLamports(0);
+      return 0;
     }
-  }, [connection, solanaWallet.publicKey])
 
-  const value = useMemo(() => ({
-    ...solanaWallet,
-    address,
-    connection,
-    sendPayment,
-    refreshBalance,
-    openModal: () => setVisible(true),
-    closeModal: () => setVisible(false),
-  }), [solanaWallet, address, connection, sendPayment, refreshBalance, setVisible]);
+    const balance = await connection.getBalance(
+      solanaWallet.publicKey
+    );
 
-  return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
+    setBalanceLamports(balance);
+
+    return balance;
+  }, [connection, solanaWallet.publicKey]);
+
+  useEffect(() => {
+    refreshBalance();
+  }, [refreshBalance]);
+
+  const sendPayment = useCallback(
+    async (toWallet, lamports) => {
+      if (!solanaWallet.publicKey)
+        throw new Error('Wallet not connected');
+
+      const tx = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: solanaWallet.publicKey,
+          toPubkey: new PublicKey(toWallet),
+          lamports: Number(lamports),
+        })
+      );
+
+      tx.feePayer = solanaWallet.publicKey;
+      tx.recentBlockhash = (
+        await connection.getLatestBlockhash()
+      ).blockhash;
+
+      const signature = await solanaWallet.sendTransaction(
+        tx,
+        connection
+      );
+
+      await connection.confirmTransaction(signature, 'confirmed');
+
+      await refreshBalance();
+
+      return signature;
+    },
+    [connection, solanaWallet, refreshBalance]
+  );
+
+  const value = useMemo(
+    () => ({
+      ...solanaWallet,
+
+      address,
+      balanceLamports,
+
+      wallets: solanaWallet.wallets,
+      select: solanaWallet.select,
+      connect: solanaWallet.connect,
+      disconnect: solanaWallet.disconnect,
+
+      connection,
+      sendPayment,
+      refreshBalance,
+
+      openModal: () => setVisible(true),
+      closeModal: () => setVisible(false),
+    }),
+    [
+      solanaWallet,
+      address,
+      balanceLamports,
+      connection,
+      sendPayment,
+      refreshBalance,
+      setVisible,
+    ]
+  );
+
+  return (
+    <WalletContext.Provider value={value}>
+      {children}
+    </WalletContext.Provider>
+  );
 }
 
 export function WalletProvider({ children }) {
-  const wallets = useMemo(() => [new SolflareWalletAdapter()], []);
+  const wallets = useMemo(
+    () => [
+      new PhantomWalletAdapter(),
+      new SolflareWalletAdapter(),
+    ],
+    []
+  );
+
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <SolanaWalletProvider wallets={wallets} autoConnect>
+      <SolanaWalletProvider wallets={wallets} autoConnect={false}>
         <WalletModalProvider>
           <WalletBridge>{children}</WalletBridge>
         </WalletModalProvider>
