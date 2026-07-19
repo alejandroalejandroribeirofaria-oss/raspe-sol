@@ -249,5 +249,5 @@ export function ChatProvider({ children }) {
     connected,
   };
 
-  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
+  export default ChatProvider
               }
