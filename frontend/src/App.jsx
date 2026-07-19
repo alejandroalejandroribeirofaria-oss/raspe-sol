@@ -1,3 +1,5 @@
+import ChatToggleButton from './chat/ChatToggleButton.jsx';
+import ChatWindow from './chat/ChatWindow.jsx';
 import { useEffect, useState } from 'react';
 import { useI18n } from './i18n/I18nProvider';
 import { useAudioBoot } from './hooks/useAudioBoot';
@@ -9,9 +11,6 @@ import VolumeControl from './components/VolumeControl';
 
 import WalletButton from './wallet/WalletButton';
 import WalletModal from './wallet/WalletModal';
-
-import ChatToggleButton from './chat/ChatToggleButton';
-import ChatWindow from './chat/ChatWindow';
 
 import MyTicketsPanel from './tickets/MyTicketsPanel';
 import PendingPrizeBanner from './tickets/PendingPrizeBanner';
