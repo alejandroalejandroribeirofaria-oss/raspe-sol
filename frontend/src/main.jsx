@@ -1,4 +1,4 @@
-import './styles/index.css' // <-- COLOCA ESSA PRIMEIRA LINHA
+import './styles/index.css' 
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
@@ -9,8 +9,8 @@ import { ChatProvider } from './chat/ChatProvider.jsx'
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <I18nProvider>
-      <WalletProvider>
-        <ChatProvider>
+      <WalletProvider> {/* 1º: Wallet */}
+        <ChatProvider> {/* 2º: Chat usa Wallet */}
           <App />
         </ChatProvider>
       </WalletProvider>
