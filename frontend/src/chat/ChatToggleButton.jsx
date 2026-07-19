@@ -1,4 +1,4 @@
-import { useChat } from './useChat.js';
+import { useChat } from './ChatProvider'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { audioManager } from '../audio/AudioManager.js';
 
