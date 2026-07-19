@@ -1,4 +1,5 @@
-import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
+
+import { createContext, useCallback, useEffect, useMemo, useState, useContext } from 'react';
 import {
   ConnectionProvider,
   WalletProvider as SolanaWalletProvider,
@@ -21,106 +22,49 @@ import '@solana/wallet-adapter-react-ui/styles.css';
 
 export const WalletContext = createContext(null);
 
+// ESSE AQUI QUE O RENDER NÃO TÁ ACHANDO
+export const useWallet = () => {
+  const ctx = useContext(WalletContext)
+  if (!ctx) throw new Error('useWallet must be used within <WalletProvider>')
+  return ctx
+}
+
 const endpoint = clusterApiUrl('mainnet-beta');
 
 function WalletBridge({ children }) {
+  const { wallet, connected, publicKey, signTransaction, sendTransaction } = useSolanaWallet();
   const { connection } = useConnection();
 
-  const {
-    publicKey,
-    connected,
-    connecting,
-    disconnect,
-    connect,
-    wallets,
-    select,
-    sendTransaction,
-  } = useSolanaWallet();
-
-  const [balanceLamports, setBalanceLamports] = useState(0);
-  const [status, setStatus] = useState('idle');
+  const [address, setAddress] = useState(null);
 
   useEffect(() => {
-    if (!connected || !publicKey) {
-      setBalanceLamports(0);
-      setStatus('idle');
-      return;
-    }
+    setAddress(publicKey? publicKey.toBase58() : null);
+  }, [publicKey]);
 
-    setStatus('connected');
+  const signAndSend = useCallback(async (instructions, signers = []) => {
+    if (!publicKey) throw new Error('Wallet not connected');
 
-    connection
-      .getBalance(publicKey)
-      .then(setBalanceLamports)
-      .catch(console.error);
-  }, [connected, publicKey, connection]);
+    const transaction = new Transaction().add(...instructions);
+    transaction.feePayer = publicKey;
+    transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-  const sendPayment = useCallback(
-    async (toAddress, lamports) => {
-      if (!publicKey) {
-        throw new Error('WALLET_NOT_CONNECTED');
-      }
+    const signed = await signTransaction(transaction);
+    const signature = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction(signature, 'confirmed');
 
-      setStatus('sending');
+    return signature;
+  }, [publicKey, connection, signTransaction]);
 
-      try {
-        const { blockhash } = await connection.getLatestBlockhash();
-
-        const tx = new Transaction({
-          feePayer: publicKey,
-          recentBlockhash: blockhash,
-        }).add(
-          SystemProgram.transfer({
-            fromPubkey: publicKey,
-            toPubkey: new PublicKey(toAddress),
-            lamports,
-          })
-        );
-
-        const signature = await sendTransaction(tx, connection);
-
-        await connection.confirmTransaction(signature, 'confirmed');
-
-        setStatus('success');
-
-        return signature;
-      } catch (err) {
-        setStatus('error');
-        throw err;
-      }
-    },
-    [publicKey, connection, sendTransaction]
-  );
-
-  const value = useMemo(
-    () => ({
-      address: publicKey?.toBase58() ?? null,
-      publicKey,
-      connected,
-      connecting,
-      wallets,
-      balanceLamports,
-      status,
-      connection,
-      connect,
-      disconnect,
-      select,
-      sendPayment,
-    }),
-    [
-      publicKey,
-      connected,
-      connecting,
-      wallets,
-      balanceLamports,
-      status,
-      connection,
-      connect,
-      disconnect,
-      select,
-      sendPayment,
-    ]
-  );
+  const value = useMemo(() => ({
+    connected,
+    address,
+    wallet,
+    publicKey,
+    connection,
+    signTransaction,
+    sendTransaction,
+    signAndSend,
+  }), [connected, address, wallet, publicKey, connection, signTransaction, sendTransaction, signAndSend]);
 
   return (
     <WalletContext.Provider value={value}>
@@ -140,7 +84,7 @@ export function WalletProvider({ children }) {
 
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <SolanaWalletProvider wallets={wallets} autoConnect={false}>
+      <SolanaWalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
           <WalletBridge>{children}</WalletBridge>
         </WalletModalProvider>
