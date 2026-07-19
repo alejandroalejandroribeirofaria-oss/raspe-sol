@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n/I18nProvider'
-import { useWallet } from '../wallet/useWallet.js';
+import { useWallet } from '../wallet/WalletProvider'
 import { WALLET_READY_STATE } from '../wallet/walletUtils.js';
 import { audioManager } from '../audio/AudioManager.js';
 import { api, subscribeOrderUpdates } from '../api';
