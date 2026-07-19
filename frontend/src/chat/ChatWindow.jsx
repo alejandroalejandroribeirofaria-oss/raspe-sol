@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n/I18nProvider'
 import { useChat } from './ChatProvider'
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWallet } from '../wallet/WalletProvider'
