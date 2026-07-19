@@ -1,5 +1,4 @@
-
-import { createContext, useCallback, useEffect, useMemo, useState, useContext } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import {
   ConnectionProvider,
   WalletProvider as SolanaWalletProvider,
@@ -7,81 +6,54 @@ import {
   useConnection,
 } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import {
-  PhantomWalletAdapter,
-  SolflareWalletAdapter,
-} from '@solana/wallet-adapter-wallets';
-import {
-  clusterApiUrl,
-  PublicKey,
-  SystemProgram,
-  Transaction,
-} from '@solana/web3.js';
-
+import { SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
+import { clusterApiUrl, Transaction } from '@solana/web3.js';
 import '@solana/wallet-adapter-react-ui/styles.css';
 
 export const WalletContext = createContext(null);
 
-// ESSE AQUI QUE O RENDER NÃO TÁ ACHANDO
-export const useAppWallet = () => {
-  const ctx = useContext(WalletContext)
-  if (!ctx) throw new Error('useWallet must be used within <WalletProvider>')
-  return ctx
+export function useWallet() {
+  const ctx = useContext(WalletContext);
+  if (!ctx) {
+    throw new Error('useWallet must be used within <WalletProvider>. Did you forget to wrap the app?');
+  }
+  return ctx;
 }
 
 const endpoint = clusterApiUrl('mainnet-beta');
 
 function WalletBridge({ children }) {
-  const { wallet, connected, publicKey, signTransaction, sendTransaction } = useSolanaWallet();
+  const solanaWallet = useSolanaWallet();
   const { connection } = useConnection();
-
   const [address, setAddress] = useState(null);
 
   useEffect(() => {
-    setAddress(publicKey? publicKey.toBase58() : null);
-  }, [publicKey]);
+    setAddress(solanaWallet.publicKey? solanaWallet.publicKey.toBase58() : null);
+  }, [solanaWallet.publicKey]);
 
-  const signAndSend = useCallback(async (instructions, signers = []) => {
-    if (!publicKey) throw new Error('Wallet not connected');
-
+  const signAndSend = useCallback(async (instructions) => {
+    if (!solanaWallet.publicKey) throw new Error('Wallet not connected');
     const transaction = new Transaction().add(...instructions);
-    transaction.feePayer = publicKey;
+    transaction.feePayer = solanaWallet.publicKey;
     transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-
-    const signed = await signTransaction(transaction);
+    const signed = await solanaWallet.signTransaction(transaction);
     const signature = await connection.sendRawTransaction(signed.serialize());
     await connection.confirmTransaction(signature, 'confirmed');
-
     return signature;
-  }, [publicKey, connection, signTransaction]);
+  }, [solanaWallet, connection]);
 
   const value = useMemo(() => ({
-    connected,
+    ...solanaWallet,
     address,
-    wallet,
-    publicKey,
     connection,
-    signTransaction,
-    sendTransaction,
     signAndSend,
-  }), [connected, address, wallet, publicKey, connection, signTransaction, sendTransaction, signAndSend]);
+  }), [solanaWallet, address, connection, signAndSend]);
 
-  return (
-    <WalletContext.Provider value={value}>
-      {children}
-    </WalletContext.Provider>
-  );
+  return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 }
 
 export function WalletProvider({ children }) {
-  const wallets = useMemo(
-    () => [
-      new PhantomWalletAdapter(),
-      new SolflareWalletAdapter(),
-    ],
-    []
-  );
-
+  const wallets = useMemo(() => [new SolflareWalletAdapter()], []);
   return (
     <ConnectionProvider endpoint={endpoint}>
       <SolanaWalletProvider wallets={wallets} autoConnect>
