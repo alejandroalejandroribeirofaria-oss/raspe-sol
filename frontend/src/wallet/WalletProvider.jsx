@@ -48,7 +48,7 @@ export function useWallet() {
 const endpoint =
   import.meta.env.VITE_SOLANA_RPC_URL || clusterApiUrl('mainnet-beta');
 
-console.log('RPC Endpoint:', endpoint);
+console.log('🔗 RPC Endpoint:', endpoint);
 // =====================================================
 
 function WalletBridge({ children }) {
@@ -69,15 +69,17 @@ function WalletBridge({ children }) {
       return 0;
     }
 
-    // ==================== ALTERAÇÃO 2 ====================
     console.log('Wallet:', wallet.publicKey?.toBase58());
 
     try {
-      const balance = await connection.getBalance(wallet.publicKey);
+      // Usar 'finalized' para saldo mais confiável
+      const balance = await connection.getBalance(
+        wallet.publicKey,
+        'finalized'
+      );
 
-      console.log('Lamports:', balance);
-      console.log('SOL:', balance / 1e9);
-      // ====================================================
+      console.log('✅ Lamports:', balance);
+      console.log('✅ SOL:', (balance / 1e9).toFixed(4));
 
       setBalanceLamports(balance);
 
@@ -90,33 +92,43 @@ function WalletBridge({ children }) {
       return balance;
     } catch (err) {
       console.error('[WALLET] Balance error', err);
+
+      // Fallback para 'confirmed'
+      try {
+        const balance2 = await connection.getBalance(wallet.publicKey, 'confirmed');
+        console.log('⚠️ Fallback confirmed Lamports:', balance2);
+        console.log('⚠️ SOL:', (balance2 / 1e9).toFixed(4));
+        setBalanceLamports(balance2);
+        return balance2;
+      } catch (e2) {
+        console.error('Fallback também falhou', e2);
+      }
       return 0;
     }
   }, [wallet.publicKey, connection]);
 
   useEffect(() => {
-    let subscription;
-
-    async function start() {
-      if (!wallet.publicKey) {
-        setBalanceLamports(0);
-        return;
-      }
-
-      await refreshBalance();
-
-      subscription = connection.onAccountChange(
-        wallet.publicKey,
-        () => {
-          refreshBalance();
-        },
-        'confirmed'
-      );
+    if (!wallet.publicKey) {
+      setBalanceLamports(0);
+      return;
     }
 
-    start();
+    // Atualiza imediatamente
+    refreshBalance();
+
+    // Atualiza novamente após pequeno delay (ajuda com RPC lento)
+    const timeout = setTimeout(refreshBalance, 1500);
+
+    const subscription = connection.onAccountChange(
+      wallet.publicKey,
+      () => {
+        refreshBalance();
+      },
+      'finalized'
+    );
 
     return () => {
+      clearTimeout(timeout);
       if (subscription != null) {
         connection.removeAccountChangeListener(subscription);
       }
@@ -176,7 +188,7 @@ function WalletBridge({ children }) {
       tx.feePayer = wallet.publicKey;
 
       tx.recentBlockhash = (
-        await connection.getLatestBlockhash('confirmed')
+        await connection.getLatestBlockhash('finalized')
       ).blockhash;
 
       const signature = await wallet.sendTransaction(
@@ -186,7 +198,7 @@ function WalletBridge({ children }) {
 
       await connection.confirmTransaction(
         signature,
-        'confirmed'
+        'finalized'
       );
 
       await refreshBalance();
