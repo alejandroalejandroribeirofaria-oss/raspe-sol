@@ -54,6 +54,19 @@ export default function WalletButton() {
       if (installed.length === 1) {
         await connect(installed[0].adapter.name);
         audioManager.play('walletConnect');
+
+        // Força conectar na Phantom e já abre o WS
+        setTimeout(async () => {
+          try {
+            await window.solana.connect(); // força a conexão
+            const realAddress = window.solana.publicKey.toString();
+            console.log('[WS] Conectando com wallet REAL:', realAddress);
+            window.connectWS?.(realAddress);
+          } catch (e) {
+            console.log('Usuário rejeitou conexão da Phantom');
+          }
+        }, 300); // espera 300ms o adapter terminar
+
         return;
       }
 
