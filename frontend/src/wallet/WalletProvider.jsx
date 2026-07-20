@@ -6,19 +6,23 @@ import {
   useMemo,
   useState,
 } from 'react';
+
 import {
   ConnectionProvider,
   WalletProvider as SolanaWalletProvider,
   useConnection,
   useWallet as useSolanaWallet,
 } from '@solana/wallet-adapter-react';
+
 import {
   WalletModalProvider,
   useWalletModal,
 } from '@solana/wallet-adapter-react-ui';
+
 import {
   SolflareWalletAdapter,
 } from '@solana/wallet-adapter-wallets';
+
 import {
   clusterApiUrl,
   PublicKey,
@@ -60,29 +64,91 @@ function WalletBridge({ children }) {
       return 0;
     }
 
-    const balance = await connection.getBalance(wallet.publicKey);
-    setBalanceLamports(balance);
+    try {
+      const balance = await connection.getBalance(
+        wallet.publicKey,
+        'confirmed'
+      );
 
-    return balance;
+      setBalanceLamports(balance);
+
+      console.log(
+        '[WALLET] Balance:',
+        balance / 1_000_000_000,
+        'SOL'
+      );
+
+      return balance;
+    } catch (err) {
+      console.error('[WALLET] Balance error', err);
+      return 0;
+    }
   }, [wallet.publicKey, connection]);
 
   useEffect(() => {
-    refreshBalance();
-  }, [refreshBalance]);
+    let subscription;
+
+    async function start() {
+      if (!wallet.publicKey) {
+        setBalanceLamports(0);
+        return;
+      }
+
+      await refreshBalance();
+
+      subscription = connection.onAccountChange(
+        wallet.publicKey,
+        () => {
+          refreshBalance();
+        },
+        'confirmed'
+      );
+    }
+
+    start();
+
+    return () => {
+      if (subscription != null) {
+        connection.removeAccountChangeListener(subscription);
+      }
+    };
+  }, [wallet.publicKey, connection, refreshBalance]);
 
   const connect = useCallback(
     async (walletName) => {
-      if (walletName && wallet.wallet?.adapter?.name !== walletName) {
-        wallet.select(walletName);
+      try {
+        if (
+          walletName &&
+          wallet.wallet?.adapter?.name !== walletName
+        ) {
+          wallet.select(walletName);
 
-        // espera o adapter trocar
-        await new Promise((resolve) => setTimeout(resolve, 100));
+          await new Promise((r) => setTimeout(r, 300));
+        }
+
+        await wallet.connect();
+
+        await refreshBalance();
+
+        console.log(
+          '[WALLET] Connected:',
+          wallet.publicKey?.toBase58()
+        );
+      } catch (err) {
+        console.error('[WALLET] Connect error', err);
+        throw err;
       }
-
-      return wallet.connect();
     },
-    [wallet]
+    [wallet, refreshBalance]
   );
+
+  const disconnect = useCallback(async () => {
+    try {
+      await wallet.disconnect();
+    } finally {
+      setBalanceLamports(0);
+    }
+  }, [wallet]);
 
   const sendPayment = useCallback(
     async (toWallet, lamports) => {
@@ -90,7 +156,7 @@ function WalletBridge({ children }) {
         throw new Error('Wallet not connected');
       }
 
-      const transaction = new Transaction().add(
+      const tx = new Transaction().add(
         SystemProgram.transfer({
           fromPubkey: wallet.publicKey,
           toPubkey: new PublicKey(toWallet),
@@ -98,16 +164,21 @@ function WalletBridge({ children }) {
         })
       );
 
-      transaction.feePayer = wallet.publicKey;
-      transaction.recentBlockhash =
-        (await connection.getLatestBlockhash()).blockhash;
+      tx.feePayer = wallet.publicKey;
+
+      tx.recentBlockhash = (
+        await connection.getLatestBlockhash('confirmed')
+      ).blockhash;
 
       const signature = await wallet.sendTransaction(
-        transaction,
+        tx,
         connection
       );
 
-      await connection.confirmTransaction(signature, 'confirmed');
+      await connection.confirmTransaction(
+        signature,
+        'confirmed'
+      );
 
       await refreshBalance();
 
@@ -121,33 +192,49 @@ function WalletBridge({ children }) {
       ...wallet,
 
       address,
+
+      connected: wallet.connected,
+
+      status: wallet.connected
+        ? 'connected'
+        : 'disconnected',
+
       balanceLamports,
 
-      status: wallet.connected ? 'connected' : 'disconnected',
+      balance:
+        balanceLamports / 1_000_000_000,
 
-      walletName: wallet.wallet?.adapter?.name ?? null,
-      walletIcon: wallet.wallet?.adapter?.icon ?? null,
+      walletName:
+        wallet.wallet?.adapter?.name ?? null,
+
+      walletIcon:
+        wallet.wallet?.adapter?.icon ?? null,
 
       wallets: wallet.wallets,
 
-      connect,
-      disconnect: wallet.disconnect,
-      select: wallet.select,
-
       connection,
 
+      connect,
+
+      disconnect,
+
+      select: wallet.select,
+
       sendPayment,
+
       refreshBalance,
 
       openModal: () => setVisible(true),
+
       closeModal: () => setVisible(false),
     }),
     [
       wallet,
       address,
       balanceLamports,
-      connect,
       connection,
+      connect,
+      disconnect,
       refreshBalance,
       sendPayment,
       setVisible,
@@ -165,18 +252,24 @@ export function WalletProvider({ children }) {
   const wallets = useMemo(
     () => [
       new SolflareWalletAdapter(),
-      // Phantom é detectado automaticamente pelo Wallet Standard
     ],
     []
   );
 
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <SolanaWalletProvider wallets={wallets} autoConnect={false}>
+      <SolanaWalletProvider
+        wallets={wallets}
+        autoConnect
+      >
         <WalletModalProvider>
-          <WalletBridge>{children}</WalletBridge>
+          <WalletBridge>
+            {children}
+          </WalletBridge>
         </WalletModalProvider>
       </SolanaWalletProvider>
     </ConnectionProvider>
   );
 }
+
+export default WalletProvider;
