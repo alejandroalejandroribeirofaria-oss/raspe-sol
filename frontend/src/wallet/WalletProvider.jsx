@@ -187,9 +187,9 @@ function WalletBridge({ children }) {
 
       tx.feePayer = wallet.publicKey;
 
-      tx.recentBlockhash = (
-        await connection.getLatestBlockhash('finalized')
-      ).blockhash;
+      const latestBlockhash = await connection.getLatestBlockhash('confirmed');
+
+      tx.recentBlockhash = latestBlockhash.blockhash;
 
       const signature = await wallet.sendTransaction(
         tx,
@@ -197,8 +197,12 @@ function WalletBridge({ children }) {
       );
 
       await connection.confirmTransaction(
-        signature,
-        'finalized'
+        {
+          signature,
+          blockhash: latestBlockhash.blockhash,
+          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+        },
+        'confirmed'
       );
 
       await refreshBalance();
