@@ -1,4 +1,5 @@
 import { WebSocketServer } from 'ws';
+
 import {
   sendMessage,
   toggleReaction,
@@ -7,6 +8,7 @@ import {
   getReactionsFor,
   ChatError,
 } from './chatService.js';
+
 import {
   registerConnection,
   unregisterConnection,
@@ -15,22 +17,41 @@ import {
   getSocketsForWallet,
 } from './presenceService.js';
 
-const clients = new Set(); // every open chat socket, regardless of wallet
 
-function send(ws, type, payload) {
-  if (ws.readyState !== ws.OPEN) return;
-  ws.send(JSON.stringify({ type, ...payload }));
+const clients = new Set();
+
+
+function send(ws, type, payload = {}) {
+  if (!ws || ws.readyState !== ws.OPEN) return;
+
+  ws.send(JSON.stringify({
+    type,
+    ...payload,
+  }));
 }
 
-function broadcast(type, payload, { exclude } = {}) {
-  const message = JSON.stringify({ type, ...payload });
-  for (const ws of clients) {
-    if (ws === exclude) continue;
-    if (ws.readyState === ws.OPEN) ws.send(message);
+
+function broadcast(type, payload = {}, exclude = null) {
+
+  const message = JSON.stringify({
+    type,
+    ...payload,
+  });
+
+
+  for (const client of clients) {
+
+    if (client === exclude) continue;
+
+    if (client.readyState === client.OPEN) {
+      client.send(message);
+    }
   }
 }
 
-function serializeMessage(row, reactionsByMessage) {
+
+function serializeMessage(row, reactionsByMessage = {}) {
+
   return {
     id: row.id,
     wallet: row.wallet,
@@ -40,123 +61,441 @@ function serializeMessage(row, reactionsByMessage) {
     createdAt: row.created_at,
     reactions: reactionsByMessage[row.id] || [],
   };
+
 }
 
+
+
 export function initChatHub(server) {
-  const wss = new WebSocketServer({ server, path: '/ws/chat' });
+
+
+  const wss = new WebSocketServer({
+    server,
+    path: '/ws/chat',
+  });
+
+
+
+  console.log('[CHAT] WebSocket iniciado em /ws/chat');
+
+
 
   wss.on('connection', (ws, req) => {
+
+
+    console.log(
+      '[CHAT] Nova conexão:',
+      req.url
+    );
+
+
+
     let wallet = null;
+
+
+
     try {
-      const url = new URL(req.url, 'http://internal');
+
+      const url = new URL(
+        req.url,
+        'http://internal'
+      );
+
       wallet = url.searchParams.get('wallet');
-    } catch {
-      // malformed URL — treated as anonymous below
+
+    } catch (err) {
+
+      console.error(
+        '[CHAT] URL inválida',
+        err
+      );
+
     }
+
+
 
     if (!wallet) {
-      send(ws, 'chat:error', { code: 'WALLET_REQUIRED', message: 'Connect a wallet before joining chat.' });
+
+      console.log(
+        '[CHAT] conexão recusada: sem wallet'
+      );
+
+
+      send(
+        ws,
+        'chat:error',
+        {
+          code:'WALLET_REQUIRED',
+          message:'Connect wallet before joining chat.'
+        }
+      );
+
+
       ws.close();
       return;
+
     }
+
+
+
+    console.log(
+      '[CHAT] Wallet conectada:',
+      wallet
+    );
+
+
 
     ws._wallet = wallet;
+
+
     clients.add(ws);
-    const wentOnline = registerConnection(wallet, ws);
 
-    const activeMessages = getActiveMessages();
-    const reactionsByMessage = getReactionsFor(activeMessages.map((m) => m.id));
 
-    send(ws, 'chat:init', {
-      messages: activeMessages.map((m) => serializeMessage(m, reactionsByMessage)),
-      onlineCount: getOnlineCount(),
-    });
+
+    const wentOnline =
+      registerConnection(wallet, ws);
+
+
+
+    const activeMessages =
+      getActiveMessages();
+
+
+    const reactions =
+      getReactionsFor(
+        activeMessages.map(
+          m => m.id
+        )
+      );
+
+
+
+    send(
+      ws,
+      'chat:init',
+      {
+        messages:
+          activeMessages.map(
+            m => serializeMessage(m,reactions)
+          ),
+
+        onlineCount:
+          getOnlineCount()
+      }
+    );
+
+
 
     if (wentOnline) {
-      broadcast('chat:join', { wallet, onlineCount: getOnlineCount() }, { exclude: ws });
-    }
-    broadcast('chat:presence', { onlineCount: getOnlineCount() });
 
-    ws.on('message', (raw) => {
-      let msg;
-      try {
-        msg = JSON.parse(raw.toString());
-      } catch {
-        return; // ignore malformed frames
+      broadcast(
+        'chat:join',
+        {
+          wallet,
+          onlineCount:getOnlineCount()
+        },
+        ws
+      );
+
+    }
+
+
+
+    broadcast(
+      'chat:presence',
+      {
+        onlineCount:getOnlineCount()
       }
+    );
+
+
+
+
+
+    ws.on('message',(raw)=>{
+
+
+      let msg;
+
+
+      try {
+
+        msg = JSON.parse(
+          raw.toString()
+        );
+
+      } catch {
+
+        return;
+
+      }
+
+
 
       touchLastSeen(wallet);
 
+
+
       try {
-        switch (msg.type) {
-          case 'chat:send': {
-            const saved = sendMessage({
-              wallet,
-              message: msg.message,
-              imagePath: msg.imagePath,
-              replyTo: msg.replyTo || null,
-            });
-            broadcast('chat:new', { message: serializeMessage(saved, {}) });
-            break;
-          }
-          case 'chat:typing': {
-            broadcast('chat:typing', { wallet }, { exclude: ws });
-            break;
-          }
-          case 'chat:react': {
-            if (!msg.messageId || !msg.emoji) break;
-            const result = toggleReaction({ messageId: msg.messageId, wallet, emoji: msg.emoji });
-            broadcast('chat:reaction', result);
-            break;
-          }
-          case 'chat:report': {
-            if (!msg.messageId) break;
-            const result = reportMessage({ messageId: msg.messageId, wallet });
-            if (result.hidden) broadcast('chat:hidden', { messageId: result.messageId });
-            else send(ws, 'chat:reported', result);
-            break;
-          }
-          default:
-          // unknown message type — ignore rather than error, keeps the
-          // protocol forward-compatible with future client versions
+
+
+        switch(msg.type){
+
+
+          case 'chat:send':
+
+            const saved =
+              sendMessage({
+                wallet,
+                message:msg.message,
+                imagePath:msg.imagePath,
+                replyTo:msg.replyTo || null,
+              });
+
+
+            broadcast(
+              'chat:new',
+              {
+                message:
+                  serializeMessage(saved,{})
+              }
+            );
+
+
+          break;
+
+
+
+          case 'chat:typing':
+
+            broadcast(
+              'chat:typing',
+              {wallet},
+              ws
+            );
+
+          break;
+
+
+
+
+          case 'chat:react':
+
+            if(!msg.messageId || !msg.emoji)
+              break;
+
+
+            broadcast(
+              'chat:reaction',
+              toggleReaction({
+                messageId:msg.messageId,
+                wallet,
+                emoji:msg.emoji
+              })
+            );
+
+
+          break;
+
+
+
+          case 'chat:report':
+
+            if(!msg.messageId)
+              break;
+
+
+            const result =
+              reportMessage({
+                messageId:msg.messageId,
+                wallet
+              });
+
+
+            if(result.hidden){
+
+              broadcast(
+                'chat:hidden',
+                {
+                  messageId:
+                    result.messageId
+                }
+              );
+
+            }else{
+
+              send(
+                ws,
+                'chat:reported',
+                result
+              );
+
+            }
+
+
+          break;
+
+
         }
-      } catch (err) {
-        if (err instanceof ChatError) {
-          send(ws, 'chat:error', { code: err.code, message: err.message });
-        } else {
-          console.error('[chat ws]', err);
-          send(ws, 'chat:error', { code: 'INTERNAL_ERROR', message: 'Something went wrong.' });
+
+
+
+      } catch(err){
+
+
+        console.error(
+          '[CHAT ERROR]',
+          err
+        );
+
+
+        if(err instanceof ChatError){
+
+          send(
+            ws,
+            'chat:error',
+            {
+              code:err.code,
+              message:err.message
+            }
+          );
+
+
+        }else{
+
+          send(
+            ws,
+            'chat:error',
+            {
+              code:'INTERNAL_ERROR',
+              message:'Something went wrong.'
+            }
+          );
+
         }
+
       }
+
+
     });
 
-    ws.on('close', () => {
+
+
+
+
+    ws.on('close',()=>{
+
+
+      console.log(
+        '[CHAT] desconectado:',
+        wallet
+      );
+
+
       clients.delete(ws);
-      const wentOffline = unregisterConnection(wallet, ws);
-      if (wentOffline) {
-        broadcast('chat:leave', { wallet, onlineCount: getOnlineCount() });
-      } else {
-        broadcast('chat:presence', { onlineCount: getOnlineCount() });
+
+
+
+      const wentOffline =
+        unregisterConnection(
+          wallet,
+          ws
+        );
+
+
+
+      if(wentOffline){
+
+        broadcast(
+          'chat:leave',
+          {
+            wallet,
+            onlineCount:getOnlineCount()
+          }
+        );
+
+      }else{
+
+        broadcast(
+          'chat:presence',
+          {
+            onlineCount:getOnlineCount()
+          }
+        );
+
       }
+
+
     });
+
+
+
+
+    ws.on('error',(err)=>{
+
+      console.error(
+        '[CHAT SOCKET ERROR]',
+        wallet,
+        err.message
+      );
+
+    });
+
+
+
   });
 
+
+
   return wss;
+
 }
 
-/** Used by the admin "expel user" action — closes every open socket for a wallet. */
-export function kickWallet(wallet, reason = 'Removed by an administrator.') {
-  const sockets = getSocketsForWallet(wallet);
-  for (const ws of sockets) {
-    send(ws, 'chat:kicked', { reason });
+
+
+
+export function kickWallet(
+  wallet,
+  reason='Removed by administrator.'
+){
+
+  const sockets =
+    getSocketsForWallet(wallet);
+
+
+  for(const ws of sockets){
+
+    send(
+      ws,
+      'chat:kicked',
+      {
+        reason
+      }
+    );
+
+
     ws.close();
+
   }
+
+
   return sockets.length;
+
 }
 
-/** Used by the expiration sweep to tell every connected client which messages just vanished. */
-export function broadcastExpired(messageIds) {
-  if (messageIds.length === 0) return;
-  broadcast('chat:expired', { messageIds });
-}
 
+
+export function broadcastExpired(messageIds){
+
+  if(!messageIds.length)
+    return;
+
+
+  broadcast(
+    'chat:expired',
+    {
+      messageIds
+    }
+  );
+
+}
