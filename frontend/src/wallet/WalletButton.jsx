@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; // <- adiciona useEffect
 import { useI18n } from '../i18n/I18nProvider';
 import { useWallet } from './WalletProvider';
 import {
@@ -13,7 +13,7 @@ export default function WalletButton() {
   const { t } = useI18n();
 
   const {
-    address,
+    address, // <- esse aqui já vem do provider depois do connect
     balanceLamports,
     status,
     walletName,
@@ -26,6 +26,15 @@ export default function WalletButton() {
   } = useWallet();
 
   const [copied, setCopied] = useState(false);
+
+  // ADICIONA ISSO AQUI: conecta o WS quando a wallet conectar
+  useEffect(() => {
+    if (status === 'connected' && address) {
+      console.log('[WS] Conectando com wallet:', address);
+      // Troca pela sua função de connectWS
+      window.connectWS?.(address);
+    }
+  }, [status, address]);
 
   const handleConnectClick = async () => {
     try {
@@ -53,6 +62,7 @@ export default function WalletButton() {
     try {
       audioManager.play('walletDisconnect');
       await disconnect();
+      window.ws?.close(); // <- fecha o WS tbm
     } catch (err) {
       console.error(err);
     }
@@ -72,31 +82,21 @@ export default function WalletButton() {
     return (
       <div className="wallet-panel">
         {networkMismatch && (
-          <span
-            className="wallet-panel__warning"
-            title={t('networkMismatch')}
-          >
+          <span className="wallet-panel__warning" title={t('networkMismatch')}>
             ⚠️
           </span>
         )}
 
         {walletIcon && (
-          <img
-            src={walletIcon}
-            alt={walletName}
-            className="wallet-panel__icon"
-          />
+          <img src={walletIcon} alt={walletName} className="wallet-panel__icon" />
         )}
 
         <span className="wallet-panel__balance">
           {formatSol(balanceLamports)}
         </span>
 
-        <button
-          className="wallet-panel__address"
-          onClick={handleCopy}
-        >
-          {copied ? t('copied') : shortenAddress(address)}
+        <button className="wallet-panel__address" onClick={handleCopy}>
+          {copied? t('copied') : shortenAddress(address)}
         </button>
 
         <button
@@ -111,10 +111,7 @@ export default function WalletButton() {
   }
 
   return (
-    <button
-      className="wallet-pill"
-      onClick={handleConnectClick}
-    >
+    <button className="wallet-pill" onClick={handleConnectClick}>
       {t('connectWallet')}
     </button>
   );
