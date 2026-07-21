@@ -1,11 +1,11 @@
-import { PublicKey } from '@solana/web3.js';
+import { PublicKey, clusterApiUrl } from '@solana/web3.js';
 
 function bool(val, fallback) {
   if (val === undefined) return fallback;
   return val === 'true' || val === '1';
 }
 
-const PUBLIC_MAINNET_RPC = 'https://api.mainnet-beta.solana.com';
+const PUBLIC_MAINNET_RPC = clusterApiUrl('mainnet-beta');
 
 // ---------------------------------------------------------------------------
 // Central lot & prize configuration. This is the one place to change ticket
@@ -135,4 +135,3 @@ export function assertProductionReady() {
     );
   }
 }
-
